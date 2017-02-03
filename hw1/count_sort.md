@@ -27,4 +27,13 @@ the whole array at once.
  
 ## Question E
 
+The following table compares averaged execution time of sorting n numbers using 
+the given sorting algorithm. Both parallelized versions ran on 4 processors
+with 4 threads.
 
+ n    | Serial Time | Parallel Time | Worsharing | Library Qsort
+---   |    ---      |     ---       |    ---     |   ---
+500   | 0.0047 s    | 0.0091 s      | 0.0083 s   | 0.0001 s
+1000  | 0.0131 s    | 0.0061 s      | 0.0092 s   | 0.0003 s
+5000  | 0.2713 s    | 0.0993 s      | 0.0985 s   | 0.0013 s
+10000 | 1.0748 s    | 0.3909 s      | 0.3734 s   | 0.0024 s
