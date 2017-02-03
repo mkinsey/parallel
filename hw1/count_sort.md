@@ -13,17 +13,18 @@ should be private to each thread.
 
 ## Question B 
 
-There should be no loop-carried dependencies.
+There are no loop-carried dependencies. Due to the nature
+of the algorithm, each index of the `temp` array is only updated
+once. Using the work-sharing construct, each iteration of the for
+loop is computed once. This iteration then works through the collection
+independently of other iterations.
 
 ## Question C
 
-Because the `temp` array is updated one index at a time,
-and each index should only be updated once, we could call
-`memcpy` for each index directly inside the outer loop. This
-would parallelize the `memcpy` call, however I suspect it would
-be faster to copy the whole array at once.
-
+The `memcpy` call can be replaced with a second parallel loop, replacing 
+indexes of `a` with `temp` however I suspect it would be faster to copy 
+the whole array at once. 
+ 
 ## Question E
 
-...
 
