@@ -1,0 +1,4 @@
+gcc -fopenmp main.c -o serial
+gcc -fopenmp count_sort.c -o workshare
+gcc -fopenmp custom_count_sort.c -o custom
+
