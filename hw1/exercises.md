@@ -1,6 +1,10 @@
 # Homework 1 Exercises 
 
-Questions from the text Parallel Programming and OpenMP
+Questions from the text Parallel Programming in MPI and OpenMP by Victor 
+Eijkhout . 
+
+*Note to grader: .html file content is identical to .md file. I included both in
+ case you have a preference.*
 
 ## 25.2.1
 
