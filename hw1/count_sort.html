@@ -1,0 +1,52 @@
+<h1 id="homework-1">Homework 1</h1>
+<p>Michael Kinsey</p>
+<p>2-7-17</p>
+<h2 id="question-a">Question A</h2>
+<p>If we attempt to parallelize the outer for loop in the provided count_sort method, we will need to share the variables <code>i</code> and <code>temp</code>. The variables <code>j</code> and <code>count</code> should be private to each thread.</p>
+<h2 id="question-b">Question B</h2>
+<p>There are no loop-carried dependencies. Due to the nature of the algorithm, each index of the <code>temp</code> array is only updated once. Using the work-sharing construct, each iteration of the for loop is computed once. This iteration then works through the collection independently of other iterations.</p>
+<h2 id="question-c">Question C</h2>
+<p>The <code>memcpy</code> call can be replaced with a second parallel loop, replacing indexes of <code>a</code> with <code>temp</code> however I suspect it would be faster to copy the whole array at once.</p>
+<h2 id="question-e">Question E</h2>
+<p>The following table compares averaged execution time of sorting n numbers using the given sorting algorithm. Both parallelized versions ran on 4 processors with 4 threads.</p>
+<table>
+<thead>
+<tr class="header">
+<th align="left">n</th>
+<th align="left">Serial Time</th>
+<th align="left">Parallel Time</th>
+<th align="left">Worsharing</th>
+<th align="left">Library Qsort</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">500</td>
+<td align="left">0.0047 s</td>
+<td align="left">0.0091 s</td>
+<td align="left">0.0083 s</td>
+<td align="left">0.0001 s</td>
+</tr>
+<tr class="even">
+<td align="left">1000</td>
+<td align="left">0.0131 s</td>
+<td align="left">0.0061 s</td>
+<td align="left">0.0092 s</td>
+<td align="left">0.0003 s</td>
+</tr>
+<tr class="odd">
+<td align="left">5000</td>
+<td align="left">0.2713 s</td>
+<td align="left">0.0993 s</td>
+<td align="left">0.0985 s</td>
+<td align="left">0.0013 s</td>
+</tr>
+<tr class="even">
+<td align="left">10000</td>
+<td align="left">1.0748 s</td>
+<td align="left">0.3909 s</td>
+<td align="left">0.3734 s</td>
+<td align="left">0.0024 s</td>
+</tr>
+</tbody>
+</table>

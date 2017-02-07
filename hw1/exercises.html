@@ -1,0 +1,26 @@
+<h1 id="homework-1-exercises">Homework 1 Exercises</h1>
+<p>Questions from the text Parallel Programming and OpenMP</p>
+<h2 id="section">25.2.1</h2>
+<p>The output will vary by machine for both programs. For my machine, the serial program will output:</p>
+<pre><code>procs_8
+threads_1
+num_0</code></pre>
+<p>The parallelized version will likely have a different output each time it is executed because calls to various print statements happen concurrently. The output may look something like this:</p>
+<pre><code>procs_8
+threads_8
+procs_8
+threads_8
+num_5
+procs_8
+threads_8
+num_4
+(...)</code></pre>
+<h2 id="section-1">25.2.2</h2>
+<h3 id="variant-1">Variant 1</h3>
+<p>The loop can be parallelized with a simple workflow construct (<code>#pragma omp parallel for</code>) before the for loop.</p>
+<h3 id="variant-2">Variant 2</h3>
+<p>Variant 2 cannot be parallelized because of an inter-loop dependency. Each loop updates value <code>x[i]</code> and accesses value <code>x[i+1]</code>, giving race conditions between threads.</p>
+<h3 id="variant-3">Variant 3</h3>
+<p>Variant 3 cannot be parallelized due to the same reason listed for variant 2, replacing <code>x[i-1]</code> for <code>x[i+1]</code>.</p>
+<h3 id="variant-4">Variant 4</h3>
+<p>Variant 4 cannot be parallelized for the same reasons listed above. Additionaly, <code>a[i]</code> determines the value of <code>a[i+1]</code>, another inter-loop dependency.</p>
