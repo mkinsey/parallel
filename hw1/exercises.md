@@ -39,17 +39,21 @@ The loop can be parallelized with a simple workflow construct
 
 ### Variant 2
 
-Variant 2 cannot be parallelized because of an inter-loop dependency. Each loop 
-updates value `x[i]` and accesses value `x[i+1]`, giving race conditions
-between threads.
+Variant 2 requires some extra work to be parallelized while avoiding race 
+conditions. First, create a temporary array, say `t` to hold the previous 
+values of `x`. Next, split the for loop into two parallel loops. In the first,
+simply add the line updating `x[i]`. In the second loop, update the value of
+`a[i]` but use `t[i+1]` in place of `x[i+1]`.
 
 ### Variant 3
 
-Variant 3 cannot be parallelized due to the same reason listed for variant 2,
-replacing `x[i-1]` for `x[i+1]`.
+Variant 3 can be parallelized by breaking the for loop into two parallel 
+worksharing loops. Because calculating `a[i]` requires first updating and then
+accessing `x[i-1]`, we must be sure that `x[i-1]` is computed first. The 
+implicit barrier at the end of the first worksharing section accomplishes this.
 
 ### Variant 4
 
-Variant 4 cannot be parallelized for the same reasons listed above. Additionaly,
-`a[i]` determines the value of `a[i+1]`, another inter-loop dependency.
-
+Variant 4 uses the same solution as Variant 3. By using two separate loops,
+the index updated in `a` is irrelevant, as long as the accessed value in `x` has
+been computed. 
