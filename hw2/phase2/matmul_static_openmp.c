@@ -8,7 +8,7 @@
 // will take place. One such case is when for
 // each row of A ( rows 0 <= i < n)
 //             sum(j=0 ... n-1) abs(a[i][j])  < 1.0    
-// Then the itteration will converge, assuming no roundoff or overflow.
+// Then the iteration will converge, assuming no roundoff or overflow.
 // Example
 // % ./matmul_static 4 10 5
 //
@@ -37,7 +37,7 @@
 void srand48(long int seedval);
 double drand48(void);
 
-#define N 100
+#define N 10000
 
 double 	a[N][N];// transformation matrix
 double 	b[N];   // transformation vector 
@@ -62,24 +62,30 @@ int main(int argc, char *argv[]) {
     double 	errori; // | t1[i] - t[i] |
     char	ch;	// for error checking on command line args.
     char   *filename; // specify output file
-    filename = "static-out-omp.txt"; // defualt file name
+    FILE *fp; //
+    filename = "static-out-omp.txt"; // default file name
+    fp = fopen(filename, "w"); // open file
 
-    FILE *fp;
-    fp = fopen(filename, "w");
 
     // parse args
     if( argc == 6 ) {
         if( (sscanf(argv[1],"%d %[^ /t]", &n, &ch) != 1) ||
             (sscanf(argv[2],"%d %[^ /t]", &seed, &ch) != 1) ||
             (sscanf(argv[3],"%d %[^ /t]", &itt_max, &ch) != 1) ||
-            (sscanf(argv[4],"%d %[^ /t]", &nthreads, &ch) != 1)
-//            || (sscanf(argv[5],"%s %[^ /t]", &filename, &ch) != 1)
-                )
+            (sscanf(argv[4],"%d %[^ /t]", &nthreads, &ch) != 1))
         {
             fprintf(stderr," ERROR : useage: %s [ <n> <seed> <itt_max> <n-threads> <file>]\n", argv[0]);
             return(1);
         }
-    } else if(argc != 1 ) {
+
+        // open and test file
+        fp = fopen(argv[5], "w");
+        if(fp == 0){
+            fprintf(stderr, "ERROR : could not open file: %s", argv[5]);
+            return(1);
+        }
+    }
+    else if(argc != 1 ) {
         fprintf(stderr," ERROR : useage: %s [ <n> <seed> <itt_max>]\n", argv[0]);
         return(1);
     }
@@ -87,6 +93,7 @@ int main(int argc, char *argv[]) {
         fprintf(stderr," ERROR :  n must be positive and <= %d.\n", N);
         return(1);
     }
+
 
 // Generate matrix a with | eigenvalues | < 1
     srand48((long int)seed);
@@ -118,16 +125,22 @@ int main(int argc, char *argv[]) {
     for(itt=0; itt<=itt_max; itt++) {
         error=0.0;
         // column i in a
+#pragma omp parallel for
         for(i=0; i< n; i++) {
 
+            printf("Thread: %d\n", omp_get_thread_num());
             sum = 0.0;
             // row j in a, col j in t
             for(j=0; j< n; j++) {
                 sum += a[i][j] * t[j];
             }
-            t1[i] = sum + b[i];
-            errori = fabs(t1[i]-t[i]);
 
+#pragma omp critical
+            {
+                t1[i] = sum + b[i];
+            }
+
+            errori = fabs(t1[i]-t[i]);
             if(errori > error) {
                 error=errori;
             }
