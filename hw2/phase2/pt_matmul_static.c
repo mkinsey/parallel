@@ -32,7 +32,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-#include <omp.h>
+#include <pthread.h>
 
 void srand48(long int seedval);
 double drand48(void);
@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
     char	ch;	// for error checking on command line args.
     char   *filename; // specify output file
     FILE *fp; //
-    filename = "static-out-omp.txt"; // default file name
+    filename = "static-out-original.txt"; // default file name
     fp = fopen(filename, "w"); // open file
 
 
@@ -125,21 +125,20 @@ int main(int argc, char *argv[]) {
     for(itt=0; itt<=itt_max; itt++) {
         error=0.0;
         // column i in a
-#pragma omp parallel for private(sum, j)
         for(i=0; i< n; i++) {
 
-            //printf("Thread: %d\n", omp_get_thread_num());
             sum = 0.0;
             // row j in a, col j in t
             for(j=0; j< n; j++) {
                 sum += a[i][j] * t[j];
             }
 
-            t1[i] = sum + b[i];
+            {
+                t1[i] = sum + b[i];
+            }
 
             errori = fabs(t1[i]-t[i]);
             if(errori > error) {
-# pragma omp critical
                 error=errori;
             }
         }
