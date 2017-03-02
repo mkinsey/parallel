@@ -44,6 +44,13 @@ double 	b[N];   // transformation vector
 double  ts[N];	// solution vector
 double  ts1[N];	// solution vector
 
+void *dotproduct(void* i){
+    int id = (int)i;
+
+    printf("Hello %d\n", id);
+    pthread_exit(NULL);
+}
+
 int main(int argc, char *argv[]) {
     int	n=4;	// problem size
     int	seed=10;// seed for srand48() / drand48()
@@ -55,7 +62,7 @@ int main(int argc, char *argv[]) {
     int	itt_max=5;// number of itterations to preform
     int	itt;	// current itteration
     int	i, j;   // indices into arrays
-    int nthreads; // number of threads to use
+    int nthreads=4; // number of threads to use
 
     double	sum;	// computes the inner products for A * t
     double 	error;  // max | t1[i] - t[i] |
@@ -119,9 +126,19 @@ int main(int argc, char *argv[]) {
         t[i] = b[i];
     }
 
-    fprintf(fp, "\n  itt  error\n");
+    // set up pthreads
+    pthread_t threads[nthreads];
+    for(i=0; i<nthreads; i++){
+        pthread_create(&threads[i], NULL, dotproduct, (void*)i);
+    }
+
+    // join threads
+    for (i=0; i<nthreads; i++){
+        pthread_join(threads[i], NULL);
+    }
 
     // dot product of a and t
+    fprintf(fp, "\n  itt  error\n");
     for(itt=0; itt<=itt_max; itt++) {
         error=0.0;
         // column i in a

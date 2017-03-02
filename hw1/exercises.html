@@ -1,5 +1,6 @@
 <h1 id="homework-1-exercises">Homework 1 Exercises</h1>
-<p>Questions from the text Parallel Programming and OpenMP</p>
+<p>Questions from the text Parallel Programming in MPI and OpenMP by Victor Eijkhout .</p>
+<p><em>Note to grader: .html file content is identical to .md file. I included both in case you have a preference.</em></p>
 <h2 id="section">25.2.1</h2>
 <p>The output will vary by machine for both programs. For my machine, the serial program will output:</p>
 <pre><code>procs_8
@@ -19,8 +20,8 @@ num_4
 <h3 id="variant-1">Variant 1</h3>
 <p>The loop can be parallelized with a simple workflow construct (<code>#pragma omp parallel for</code>) before the for loop.</p>
 <h3 id="variant-2">Variant 2</h3>
-<p>Variant 2 cannot be parallelized because of an inter-loop dependency. Each loop updates value <code>x[i]</code> and accesses value <code>x[i+1]</code>, giving race conditions between threads.</p>
+<p>Variant 2 requires some extra work to be parallelized while avoiding race conditions. First, create a temporary array, say <code>t</code> to hold the previous values of <code>x</code>. Next, split the for loop into two parallel loops. In the first, simply add the line updating <code>x[i]</code>. In the second loop, update the value of <code>a[i]</code> but use <code>t[i+1]</code> in place of <code>x[i+1]</code>.</p>
 <h3 id="variant-3">Variant 3</h3>
-<p>Variant 3 cannot be parallelized due to the same reason listed for variant 2, replacing <code>x[i-1]</code> for <code>x[i+1]</code>.</p>
+<p>Variant 3 can be parallelized by breaking the for loop into two parallel worksharing loops. Because calculating <code>a[i]</code> requires first updating and then accessing <code>x[i-1]</code>, we must be sure that <code>x[i-1]</code> is computed first. The implicit barrier at the end of the first worksharing section accomplishes this.</p>
 <h3 id="variant-4">Variant 4</h3>
-<p>Variant 4 cannot be parallelized for the same reasons listed above. Additionaly, <code>a[i]</code> determines the value of <code>a[i+1]</code>, another inter-loop dependency.</p>
+<p>Variant 4 uses the same solution as Variant 3. By using two separate loops, the index updated in <code>a</code> is irrelevant, as long as the accessed value in <code>x</code> has been computed.</p>
