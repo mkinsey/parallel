@@ -57,7 +57,6 @@ int main(int argc, char *argv[]) {
     int	i, j;   // indices into arrays
     int nthreads; // number of threads to use
 
-    double	sum;	// computes the inner products for A * t
     double 	error;  // max | t1[i] - t[i] |
     double 	errori; // | t1[i] - t[i] |
     char	ch;	// for error checking on command line args.
@@ -122,11 +121,16 @@ int main(int argc, char *argv[]) {
     fprintf(fp, "\n  itt  error\n");
 
     // dot product of a and t
+    omp_set_num_threads(nthreads);
+#pragma omp parallel
+{
+    double	sum;	// computes the inner products for A * t
+    int id = omp_get_thread_num();
+    nthreads = omp_get_num_threads();
     for(itt=0; itt<=itt_max; itt++) {
         error=0.0;
         // column i in a
-#pragma omp parallel for private(sum, j)
-        for(i=0; i< n; i++) {
+        for(i=id; i< n; i+=nthreads) {
 
             //printf("Thread: %d\n", omp_get_thread_num());
             sum = 0.0;
@@ -144,12 +148,16 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        // swap t and t1
-        ttemp = t1;
-        t1 = t;
-        t = ttemp;
-        fprintf(fp, "%5d %14.6e\n", itt, error);
+#pragma omp master
+        {
+            // swap t and t1
+            ttemp = t1;
+            t1 = t;
+            t = ttemp;
+            fprintf(fp, "%5d %14.6e\n", itt, error);
+        }
     }
 
+}
     return(0);
 }
