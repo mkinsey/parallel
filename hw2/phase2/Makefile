@@ -15,11 +15,9 @@ matmul_omp: matmul_static_openmp.c
 matmul_pt: pt_matmul_static.c
 	${CC} ${CFLAGS} -o pt_matmul pt_matmul_static.c -lpthread
 test: all
-	./matmul_static > matmul_static.txt
-	./matmul_stack > matmul_stack.txt
-	./matmul_heap > matmul_heap.txt
-	diff matmul_static.txt matmul_stack.txt
-	diff matmul_static.txt matmul_heap.txt
+	./pt_matmul
+	./matmul_static
+	diff static-out-pthreads.txt static-out-original.txt
 tar:
 	tar -cvf matmul.tar ${SRC} ${OTHER}
 
