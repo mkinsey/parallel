@@ -2,7 +2,7 @@
 # cs454 Fall 2010
 # kapenga
 CC = gcc
-CFLAGS = -Wall -pedantic -std=c99
+CFLAGS = -Wall -pedantic -std=gnu99
 SRC = matmul_stack.c matmul_static.c matmul_heap.c
 EXE = matmul_stack matmul_static matmul_heap
 OTHER = Makefile 
