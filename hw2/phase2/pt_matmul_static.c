@@ -1,47 +1,13 @@
-// The following iteration can be used to solve linear systems
-//   t_{i+1} = A t_i + b
-// If the itteration converges to t, then t == t_{i+1} == t_i
-// So t = A t + b
-//   or  (I-a) t = b
-//   where, I is the n*n idenity matrix
-// There are several important applied problems where convergence 
-// will take place. One such case is when for
-// each row of A ( rows 0 <= i < n)
-//             sum(j=0 ... n-1) abs(a[i][j])  < 1.0    
-// Then the iteration will converge, assuming no roundoff or overflow.
-// Example
-// % ./matmul_static 4 10 5
-//
-//  a=
-//  0.189331   0.147829  -0.009582   0.012830
-// -0.020409   0.222627   0.073037   0.042701
-//  0.069882   0.228326  -0.001161   0.024936
-//  0.116375  -0.100117   0.229832   0.022235
-//
-//  b=
-//  2.411774   9.837874   6.251698   6.576916
-//
-//  itt  error
-//    0   2.878398e+00
-//    1   8.266521e-01
-//    2   2.688652e-01
-//    3   8.817662e-02
-//    4   2.832084e-02
-//    5   9.015857e-03
-//
-
-#define _XOPEN_SOURCE 600
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <pthread.h>
 
+#define N 10000
+#define ITT_MAX 10000
+
 void srand48(long int seedval);
 double drand48(void);
-
-#define N 10000
-#define ITT_MAX 10
 
 int	n=4;	// problem size
 int nthreads=4; // number of threads to use
@@ -67,7 +33,6 @@ void *dotproduct(void* arg){
     // dot product of a and t
     for(itt=0; itt<=nit; itt++) {
 
-        printf("Hello thread %li iteration %d\n", id, itt);
         // column i in a
         for(i=id; i< n; i+=nthreads) {
 
@@ -86,7 +51,6 @@ void *dotproduct(void* arg){
         pthread_barrier_wait(&barrier);
 
         if(id == 0){
-            // TODO find max error
             double current_max = errori[itt][0];
             for(i=1; i<nit; i++){
                 if(errori[itt][i] > current_max)
@@ -101,10 +65,6 @@ void *dotproduct(void* arg){
 
 int main(int argc, char *argv[]) {
     int	seed=10;// seed for srand48() / drand48()
-
-//    double  *t=ts;  // pointer to solution vector
-//    double  *t1=ts1;// pointer to next itteration of solution vector
-//    double	*ttemp;	// used to swap t1 and t at each itteration
 
     int	i, j;
     long threadnum =0;
@@ -179,7 +139,6 @@ int main(int argc, char *argv[]) {
     for(threadnum=0; threadnum<nthreads; threadnum++){
         pthread_create(&threads[threadnum], NULL, dotproduct, (void*)threadnum);
     }
-
 
     // join threads
     for (threadnum=0; threadnum<nthreads; threadnum++){
