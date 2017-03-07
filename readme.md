@@ -1,6 +1,6 @@
 # Parallel Computing 
 
-CSCI 480
+CSCI 480 - Spring 2017
 
 Topics include
 
@@ -14,9 +14,20 @@ Topics include
 
 * SIMD
 
+## OpenMP
+
+Lecture material provided by Tim Mattson's Intro to OpenMP video series.
+
+## CUDA
+
+Cuda assignments and code are from Coursera's CS 344 - Intro to Parallel Programming.
+
+
 ## High-tech compute cluster
 
-Scheduler - moab
+Uses `moab` as a scheduler
+
+Example operation:
 
 `msub -I -l nodes=1:ppn=16`
 
