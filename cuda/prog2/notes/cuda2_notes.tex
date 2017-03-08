@@ -1,0 +1,37 @@
+\documentclass{article}
+
+\begin{document}
+\title{CUDA Program Two}
+\author{Michael Kinsey}
+\date{9 March 2017}
+\maketitle
+
+In this program I present a solution to Problem Set 2 from Udacity's \textit{Intro
+to Parallel Programming} course. This program implements a parallel algorithm for
+applying a Gaussian blur to images. All modified functions are in the 
+\textit{student\_func.cu} file. For this assignment I increased the number of 
+threads to 1024 in order to eek more performance out of the program. Execution
+time through the Udacity iterface was consistently around 1.66 ms.\\
+
+The first conecptual step in this program is to reorder the data, from contiguous
+pixel structures to arrays of RGB values. This is an example of a common 
+operation in parallel computing referred to as converting an Array of Structures
+to a Structure of Arrays.
+We launch a kernel per pixel in the natural way, and call the $separateChannels$
+function for each. This separates the image into three distinct data structures,
+each holding one color channel.\\
+
+The next step is to apply the filter to each color channel and save the blurred
+output into a new array. Now we launch a kernel for each color channel in the 
+same way we have done previously, this time calling the $gaussian\_blur$ 
+function. This function takes care not to step out of the array bounds, and 
+takes the product of each filter pixel with the respective color channel pixel.
+The results are summed and then applied (product) to the center pixel. It should
+be noted that much of the code for this function was provided in the serialized
+version of the function in the \textit{reference\_calc.cpp} file.
+
+Finally, the three color channels must be recombined to form the final blurred 
+image. This function has been provided by the course instructors. The device 
+allocated memory is then freed and the function terminates.
+
+\end{document}
