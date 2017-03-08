@@ -1,0 +1,32 @@
+\documentclass{article}
+
+\begin{document}
+\title{CUDA Program One}
+\author{Michael Kinsey}
+\date{7 March 2017}
+\maketitle
+
+In this program I present a solution to Problem Set 1 from Udacity's \textit{Intro
+to Parallel Programming} course. The program uses a simple equation to convert an
+RGBA image to Greyscale. The only modified source file is $student\_func.cu$,
+which prompts the student (me) to implement two methods. \\
+
+The first method, $rgba\_to\_greyscale$, is very straightforward. This is the actual
+kernel that is ran by each thread. It uses its own x and y indexes as well as the
+block's indexes and dimensions to calculate where it is in the RGBA image. As
+evident in the source code, both images are represented as large one-dimensional
+arrays. After the index in the image is computed, a greyscale value is computed
+and the corresponding index in $greyImage$ is updated.\\
+
+The second method is called $your\_rgba\_to\_greyscale$. This function sets up the
+kernel launching for the program. Because the actual image is two dimensional, I
+set up two-dimensional blocks. In order to maximize the throughput of each block
+while maximizing compatability, I chose to use ($22 * 22 $) 484 threads, less
+than the maxiumum of 512 for older GPUs. I then specify the number of blocks to
+be initialized by dividing the width and height of the image by the values used
+to specify the number of threads per block. I add one to each value to ensure
+that the remainder of pixels are processed in the highly likely event that the
+width and height are not divisible by 22. The kernel launch call then directs
+the blocks of threads to calculate $rgba\_to\_greyscale$ using the given parameters. 
+
+\end{document}
