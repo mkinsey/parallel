@@ -6,7 +6,7 @@
 
   A High Dynamic Range (HDR) image contains a wider variation of intensity
   and color than is allowed by the RGB format with 1 byte per channel that we
-  have used in the previous assignment.  
+  have used in the previous assignment.
 
   To store this extra information we use single precision floating point for
   each channel.  This allows for an extremely wide range of intensity values.
@@ -53,7 +53,7 @@
   Old TV signals used to be transmitted in this way so that black & white
   televisions could display the luminance channel while color televisions would
   display all three of the channels.
-  
+
 
   Tone-mapping
   ============
@@ -80,12 +80,47 @@
 */
 
 #include "utils.h"
+#include <stdio.h>
 
 
-__global__ void min_reduce(float * outStream, const float* c, 
+void scan_cdf(unsigned int *h_cdf, int *h_bins, const int numBins){
+  int i,j;
+  int sum = 0;
+  for (i=0; i<numBins; i++){
+    sum += h_bins[i];
+    h_cdf[i] = sum;
+    // printf("Bin %d: %d\n", i, sum);
+  }
+
+}
+
+__global__ void scan_hist(int * d_bins, const float* d_in, int numRows,
+int numCols, const int numBins, float lumRange, float lumMin) {
+
+  int x_i = threadIdx.x + blockIdx.x * blockDim.x;
+  int y_i = threadIdx.y + blockIdx.y * blockDim.y;
+
+  if (x_i > numCols || y_i > numRows){
+    return;
+  }
+
+  int index = y_i * numCols + x_i;
+
+  // calculate bin index
+  int bin_i = ((d_in[index] - lumMin)/ lumRange * numBins);
+
+  if(bin_i > numBins-1){
+    bin_i = numBins-1;
+  }
+
+  atomicAdd(&(d_bins[bin_i]), 1);
+}
+
+__global__ void min_reduce(float * outStream, const float* c,
         int numRows, int numCols){
 
     extern __shared__ float sdata[];
+    // __shared__ float sdata[numThreadsPerBlock];
 
     int t_id = threadIdx.x;
     int id_x = t_id + (blockIdx.x * blockDim.x);
@@ -99,7 +134,7 @@ __global__ void min_reduce(float * outStream, const float* c,
     int index = id_y * numCols + id_x;
 
     // copy global to local
-    sdata[index] = c[index];
+    sdata[t_id] = c[index];
     __syncthreads();
 
 
@@ -107,16 +142,16 @@ __global__ void min_reduce(float * outStream, const float* c,
     for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1){
 
         if (t_id < s){
-            sdata[index] = sdata[index] < sdata[index + s];
+            sdata[t_id] = sdata[t_id] < sdata[t_id + s];
         }
 
         __syncthreads();
     }
 
     if(t_id == 0){
-        outStream[blockIdx.x] = sdata[index];
+        outStream[blockIdx.x] = sdata[t_id];
     }
-    
+
 }
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   unsigned int* const d_cdf,
@@ -127,9 +162,6 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   const size_t numBins)
 {
 
-    const dim3 grids(32, 32);
-
-    const dim3 block((numCols-1)/grids.x + 1, (numRows-1)/grids.y + 1);
 
   //TODO
   /*Here are the steps you need to implement
@@ -142,27 +174,70 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
        the cumulative distribution of luminance values (this should go in the
        incoming d_cdf pointer which already has been allocated for you)       */
 
-    // declare and allocate helpers 
-    float * d_intermediate;
+    // declare and allocate helpers
+    float *d_intermediate;
+    int *d_bins, *h_bins;
+    unsigned int * h_cdf;
     int a = 1 << 20;
+    const int BIN_BYTES = sizeof(int) * numBins;
 
+    // sanity check: does min change?
+    min_logLum = -0.11111;
+
+    // alloc memory
     checkCudaErrors(cudaMalloc((void **) &d_intermediate, sizeof(float) * a));
+    // device histogram
+    checkCudaErrors(cudaMalloc((void **) &d_bins, BIN_BYTES));
+    cudaMemset(d_bins, 0, BIN_BYTES);
+    // host version of histogram
+    h_bins = (int * )malloc(BIN_BYTES);
+    h_cdf = (unsigned int * )malloc(BIN_BYTES);
+
+    /*
+        Parallel Calls
+    */
+
+    const dim3 grids(32, 32);
+    const dim3 block((numCols-1)/grids.x + 1, (numRows-1)/grids.y + 1);
 
     // Find min and max of logLuminance channel
-    min_reduce<<<block, grids, 1024 * sizeof(float)>>>
+    //TODO
+    min_reduce<<<block, grids, 4096 * sizeof(float)>>>
         (d_intermediate, d_logLuminance, numRows, numCols);
 
     // reduce the final block
-    min_reduce<<<1, block, block.x * block.y * sizeof(float)>>> 
+    min_reduce<<<1, block, block.x * block.y * sizeof(float)>>>
         (&(min_logLum), d_logLuminance, numRows, numCols);
 
     // TODO max reduce
-    // subtract
+
+    // TODO remove!
+    min_logLum = -3.109206;
+    max_logLum = 2.265089;
+
+    // subtract to find range
     float rangeLum = max_logLum - min_logLum;
+    printf("Max: %f, Min: %f, Range: %f\n", max_logLum, min_logLum, rangeLum);
+
 
     // generate histogram
-    // TODO use atomicAdd
+    scan_hist<<<block, grids>>>(d_bins, d_logLuminance, numRows, numCols,
+      numBins, rangeLum, min_logLum);
+
+    // copy back to host
+    cudaMemcpy(h_bins, d_bins, BIN_BYTES, cudaMemcpyDeviceToHost);
 
 
+    // perform scan to get cdf, do it on host to avoid kernel overhead
+    scan_cdf(h_cdf, h_bins, numBins);
+
+    // copy final cdf to host
+    cudaMemcpy(d_cdf, h_cdf, BIN_BYTES, cudaMemcpyHostToDevice);
+
+    // free
+    cudaFree(d_intermediate);
+    cudaFree(d_bins);
+    free(h_bins);
+    free(h_cdf);
 
 }
