@@ -197,22 +197,24 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
         Parallel Calls
     */
 
-    const dim3 grids(32, 32);
-    const dim3 block((numCols-1)/grids.x + 1, (numRows-1)/grids.y + 1);
+    // const dim3 grids(32, 32);
+    // const dim3 block((numCols-1)/grids.x + 1, (numRows-1)/grids.y + 1);
+    int grids = 1024;
+    int block = (numCols * numRows) / grids + 1;
 
     // Find min and max of logLuminance channel
     //TODO
-    min_reduce<<<block, grids, 4096 * sizeof(float)>>>
+    min_reduce<<<block, grids, block * sizeof(float)>>>
         (d_intermediate, d_logLuminance, numRows, numCols);
 
     // reduce the final block
-    min_reduce<<<1, block, block.x * block.y * sizeof(float)>>>
+    min_reduce<<<1, block, block * sizeof(float)>>>
         (&(min_logLum), d_logLuminance, numRows, numCols);
 
     // TODO max reduce
 
     // TODO remove!
-    min_logLum = -3.109206;
+    // min_logLum = -3.109206;
     max_logLum = 2.265089;
 
     // subtract to find range
