@@ -1,113 +1,35 @@
 /* Udacity Homework 3
    HDR Tone-mapping
-
-  Background HDR
-  ==============
-
-  A High Dynamic Range (HDR) image contains a wider variation of intensity
-  and color than is allowed by the RGB format with 1 byte per channel that we
-  have used in the previous assignment.
-
-  To store this extra information we use single precision floating point for
-  each channel.  This allows for an extremely wide range of intensity values.
-
-  In the image for this assignment, the inside of church with light coming in
-  through stained glass windows, the raw input floating point values for the
-  channels range from 0 to 275.  But the mean is .41 and 98% of the values are
-  less than 3!  This means that certain areas (the windows) are extremely bright
-  compared to everywhere else.  If we linearly map this [0-275] range into the
-  [0-255] range that we have been using then most values will be mapped to zero!
-  The only thing we will be able to see are the very brightest areas - the
-  windows - everything else will appear pitch black.
-
-  The problem is that although we have cameras capable of recording the wide
-  range of intensity that exists in the real world our monitors are not capable
-  of displaying them.  Our eyes are also quite capable of observing a much wider
-  range of intensities than our image formats / monitors are capable of
-  displaying.
-
-  Tone-mapping is a process that transforms the intensities in the image so that
-  the brightest values aren't nearly so far away from the mean.  That way when
-  we transform the values into [0-255] we can actually see the entire image.
-  There are many ways to perform this process and it is as much an art as a
-  science - there is no single "right" answer.  In this homework we will
-  implement one possible technique.
-
-  Background Chrominance-Luminance
-  ================================
-
-  The RGB space that we have been using to represent images can be thought of as
-  one possible set of axes spanning a three dimensional space of color.  We
-  sometimes choose other axes to represent this space because they make certain
-  operations more convenient.
-
-  Another possible way of representing a color image is to separate the color
-  information (chromaticity) from the brightness information.  There are
-  multiple different methods for doing this - a common one during the analog
-  television days was known as Chrominance-Luminance or YUV.
-
-  We choose to represent the image in this way so that we can remap only the
-  intensity channel and then recombine the new intensity values with the color
-  information to form the final image.
-
-  Old TV signals used to be transmitted in this way so that black & white
-  televisions could display the luminance channel while color televisions would
-  display all three of the channels.
-
-
-  Tone-mapping
-  ============
-
-  In this assignment we are going to transform the luminance channel (actually
-  the log of the luminance, but this is unimportant for the parts of the
-  algorithm that you will be implementing) by compressing its range to [0, 1].
-  To do this we need the cumulative distribution of the luminance values.
-
-  Example
-  -------
-
-  input : [2 4 3 3 1 7 4 5 7 0 9 4 3 2]
-  min / max / range: 0 / 9 / 9
-
-  histo with 3 bins: [4 7 3]
-
-  cdf : [4 11 14]
-
-
-  Your task is to calculate this cumulative distribution by following these
-  steps.
-
+   Michael Kinsey
 */
-
 #include "utils.h"
 #include <stdio.h>
 
-
+// Non-parallel. Scan the hist and calculate cumulative distribution
 void scan_cdf(unsigned int *h_cdf, int *h_bins, const int numBins){
-  int i,j;
+  int i;
   int sum = 0;
   for (i=0; i<numBins; i++){
     sum += h_bins[i];
     h_cdf[i] = sum;
-    // printf("Bin %d: %d\n", i, sum);
   }
-
 }
 
-__global__ void scan_hist(int * d_bins, const float* d_in, int numRows,
-int numCols, const int numBins, float lumRange, float lumMin) {
+/*
+   Kernel function. Put values into appropriate bins using the provided formula.
+   This function also was inspired from the provided code snippets.
+*/
+__global__ void bin_hist(int * d_bins, const float* d_in, int size,
+  const int numBins, float lumRange, float lumMin) {
 
-  int x_i = threadIdx.x + blockIdx.x * blockDim.x;
-  int y_i = threadIdx.y + blockIdx.y * blockDim.y;
+  int index = threadIdx.x + blockIdx.x * blockDim.x;
 
-  if (x_i > numCols || y_i > numRows){
-    return;
+  int bin_i = 0;
+
+  if (index < size){
+    // calculate bin index
+    bin_i = ((d_in[index] - lumMin)/ lumRange * numBins);
   }
-
-  int index = y_i * numCols + x_i;
-
-  // calculate bin index
-  int bin_i = ((d_in[index] - lumMin)/ lumRange * numBins);
 
   if(bin_i > numBins-1){
     bin_i = numBins-1;
@@ -116,33 +38,29 @@ int numCols, const int numBins, float lumRange, float lumMin) {
   atomicAdd(&(d_bins[bin_i]), 1);
 }
 
-__global__ void min_reduce(float * outStream, const float* c,
-        int numRows, int numCols){
+/*
+  Kernel function, find maximum using reduce. This code was inspired from the
+  provided code snippets
+*/
+__global__ void max_reduce(float * outStream, const float* c,
+        int size){
 
     extern __shared__ float sdata[];
-    // __shared__ float sdata[numThreadsPerBlock];
 
     int t_id = threadIdx.x;
-    int id_x = t_id + (blockIdx.x * blockDim.x);
-    int id_y = threadIdx.y + (blockIdx.y * blockDim.y);
+    int index = t_id + (blockIdx.x * blockDim.x);
 
     // check array bounds
-    if (id_x < numCols || id_y < numRows){
-        return;
+    if(index < size){
+      // copy global to local
+      sdata[t_id] = c[index];
     }
-
-    int index = id_y * numCols + id_x;
-
-    // copy global to local
-    sdata[t_id] = c[index];
     __syncthreads();
-
-
 
     for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1){
 
-        if (t_id < s){
-            sdata[t_id] = sdata[t_id] < sdata[t_id + s];
+        if (t_id < s && index+s < size){
+           sdata[t_id] = fmaxf(sdata[t_id], sdata[t_id + s]);
         }
 
         __syncthreads();
@@ -153,6 +71,43 @@ __global__ void min_reduce(float * outStream, const float* c,
     }
 
 }
+
+/*
+  Kernel function, find minimum using reduce. This code was inspired from the
+  provided code snippets
+*/
+__global__ void min_reduce(float * outStream, const float* c,
+        int size){
+
+    extern __shared__ float sdata[];
+
+    // index of 1 dimensional thread
+    int t_id = threadIdx.x;
+    int index = t_id + (blockIdx.x * blockDim.x);
+
+    // check array bounds
+    if(index < size){
+      // copy global to local
+      sdata[t_id] = c[index];
+    }
+    __syncthreads();
+
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1){
+
+        if (t_id < s && index+s < size){
+           sdata[t_id] = fminf(sdata[t_id], sdata[t_id + s]);
+        }
+
+        __syncthreads();
+    }
+
+    // Copy final result of this block
+    if(t_id == 0){
+        outStream[blockIdx.x] = sdata[t_id];
+    }
+
+}
+
 void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   unsigned int* const d_cdf,
                                   float &min_logLum,
@@ -161,28 +116,12 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
                                   const size_t numCols,
                                   const size_t numBins)
 {
-
-
-  //TODO
-  /*Here are the steps you need to implement
-    1) find the minimum and maximum value in the input logLuminance channel
-       store in min_logLum and max_logLum
-    2) subtract them to find the range
-    3) generate a histogram of all the values in the logLuminance channel using
-       the formula: bin = (lum[i] - lumMin) / lumRange * numBins
-    4) Perform an exclusive scan (prefix sum) on the histogram to get
-       the cumulative distribution of luminance values (this should go in the
-       incoming d_cdf pointer which already has been allocated for you)       */
-
     // declare and allocate helpers
     float *d_intermediate;
     int *d_bins, *h_bins;
     unsigned int * h_cdf;
     int a = 1 << 20;
     const int BIN_BYTES = sizeof(int) * numBins;
-
-    // sanity check: does min change?
-    min_logLum = -0.11111;
 
     // alloc memory
     checkCudaErrors(cudaMalloc((void **) &d_intermediate, sizeof(float) * a));
@@ -193,50 +132,56 @@ void your_histogram_and_prefixsum(const float* const d_logLuminance,
     h_bins = (int * )malloc(BIN_BYTES);
     h_cdf = (unsigned int * )malloc(BIN_BYTES);
 
+    int grids = 1024;
+    int block = (numRows*numCols-1)/grids + 1;
+
+    // sanity check: does min change?
+    min_logLum = -0.11111;
     /*
-        Parallel Calls
+        Minimum of logLuminance
     */
 
-    // const dim3 grids(32, 32);
-    // const dim3 block((numCols-1)/grids.x + 1, (numRows-1)/grids.y + 1);
-    int grids = 1024;
-    int block = (numCols * numRows) / grids + 1;
-
-    // Find min and max of logLuminance channel
-    //TODO
-    min_reduce<<<block, grids, block * sizeof(float)>>>
-        (d_intermediate, d_logLuminance, numRows, numCols);
-
+    min_reduce<<<block, grids, grids * sizeof(float)>>>
+        (d_intermediate, d_logLuminance, numRows*numCols);
     // reduce the final block
-    min_reduce<<<1, block, block * sizeof(float)>>>
-        (&(min_logLum), d_logLuminance, numRows, numCols);
+    min_reduce<<<1, grids, grids * sizeof(float)>>>
+        (d_intermediate, d_intermediate, numRows*numCols);
+    // cpy back to host
+    cudaMemcpy(&min_logLum, d_intermediate, sizeof(float), cudaMemcpyDeviceToHost);
 
-    // TODO max reduce
+    /*
+      Max of logLuminance
+    */
 
-    // TODO remove!
-    // min_logLum = -3.109206;
-    max_logLum = 2.265089;
+    max_reduce<<<block, grids, grids * sizeof(float)>>>
+        (d_intermediate, d_logLuminance, numRows*numCols);
+    // reduce the final block
+    max_reduce<<<1, grids, grids * sizeof(float)>>>
+        (d_intermediate, d_intermediate, numRows*numCols);
+    cudaMemcpy(&max_logLum, d_intermediate, sizeof(float), cudaMemcpyDeviceToHost);
 
     // subtract to find range
     float rangeLum = max_logLum - min_logLum;
-    printf("Max: %f, Min: %f, Range: %f\n", max_logLum, min_logLum, rangeLum);
 
+    /*
+      generate a histogram of all the values in the logLuminance channel
+    */
 
-    // generate histogram
-    scan_hist<<<block, grids>>>(d_bins, d_logLuminance, numRows, numCols,
+    bin_hist<<<block, grids>>>(d_bins, d_logLuminance, numRows*numCols,
       numBins, rangeLum, min_logLum);
-
-    // copy back to host
     cudaMemcpy(h_bins, d_bins, BIN_BYTES, cudaMemcpyDeviceToHost);
 
+    /*
+       Scan histogram to get the cumulative distribution of luminance values.
+       Do it on host to avoid kernel overhead
+    */
 
-    // perform scan to get cdf, do it on host to avoid kernel overhead
+    // perform scan to get cdf,
     scan_cdf(h_cdf, h_bins, numBins);
-
     // copy final cdf to host
     cudaMemcpy(d_cdf, h_cdf, BIN_BYTES, cudaMemcpyHostToDevice);
 
-    // free
+    // free all allocated memory
     cudaFree(d_intermediate);
     cudaFree(d_bins);
     free(h_bins);
