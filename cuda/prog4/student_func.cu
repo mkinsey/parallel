@@ -53,24 +53,24 @@ Radix sort description
     TODO Prefix scan
     Credit goes to Mark Harris at NVIDIA
 */
-// unsigned int __device__ plus_scan(unsigned int *x){
-//   unsigned int i = threadIdx.x;
-//   unsigned int n = blockDim.x;
-//   unsigned int offset;
-//   unsigned int y;
-//
-//   for(offset = 1; offset < n; offset *= 2){
-//     if (i >= offset)
-//       y = x[i-offset];
-//
-//     __syncthreads();
-//
-//     if (i >= offset)
-//       x[i] = y + x[i];
-//     __syncthreads();
-//   }
-//   return x[i];
-// }
+unsigned int __device__ plus_scan(unsigned int *x){
+  unsigned int i = threadIdx.x;
+  unsigned int n = blockDim.x;
+  unsigned int offset;
+  unsigned int y;
+
+  for(offset = 1; offset < n; offset *= 2){
+    if (i >= offset)
+      y = x[i-offset];
+
+    __syncthreads();
+
+    if (i >= offset)
+      x[i] = y + x[i];
+    __syncthreads();
+  }
+  return x[i];
+}
 
 /*
     Patition s.t. all values with a 0 at the bit index preceed those with a 1
@@ -91,12 +91,13 @@ __device__ void partition_by_bit(unsigned int* d_in, unsigned int bit){
 
   // compute number of 1's and update d_in s.t. it contains the sum of the 1's
   // from d[0] .. d[i]
+  // TODO
   unsigned int before = plus_scan(d_in);
 
 
   // barrier in the plus_scan function means that we are synced at this point
 
-  unsigned int o_total = values[size-1]; // number of ones in array
+  unsigned int o_total = d_in[size-1]; // number of ones in array
   unsigned int z_total = size - o_total; // number of zeros
 
   __syncthreads();
@@ -105,7 +106,7 @@ __device__ void partition_by_bit(unsigned int* d_in, unsigned int bit){
   if (p_i)
     d_in[o_total-1 + z_total] = x_i;
   else
-    d_in[i - T_before] = x_i;
+    d_in[i - before] = x_i;
 
 }
 
@@ -161,7 +162,7 @@ __global__ void bin_hist(unsigned int * d_bins, unsigned int* d_in, int size,
       output location for each element and move it there
       */
       const int numBits = 1;
-      // numBins will always be 2: 0, 1
+      // numBins will always be 2 because we are counting 1's and 0's
       const int numBins = 1 << numBits;
 
       // set up vars
@@ -187,6 +188,10 @@ __global__ void bin_hist(unsigned int * d_bins, unsigned int* d_in, int size,
 
       //perform histogram of data & mask into bins
       bin_hist<<<blocks, threads>>>(d_binHistogram, d_inputVals, numElems, numBins);
+
+      // copy back
+      memcpy(d_outputPos, d_inputPos, BIN_BYTES);
+      memcpy(d_outputVals, d_inputVals, BIN_BYTES);
 
       // Free allocated memory
       cudaFree(d_binHistogram);
