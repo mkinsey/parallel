@@ -5,7 +5,10 @@
 #include "reference_calc.cpp"
 #include "utils.h"
 
-/* Red Eye Removal
+/*
+Michael Kinsey
+Udacity Homework 4
+Red Eye Removal
 ===============
 
 For this assignment we are implementing red eye removal.  This is
@@ -50,10 +53,10 @@ Radix sort description
 */
 
 /*
-    TODO Prefix scan
-    Credit goes to Mark Harris at NVIDIA
+TODO Prefix scan
+Credit goes to Mark Harris at NVIDIA
 */
-unsigned int __device__ plus_scan(unsigned int *x){
+__device__ unsigned int plus_scan(unsigned int* x){
   unsigned int i = threadIdx.x;
   unsigned int n = blockDim.x;
   unsigned int offset;
@@ -61,21 +64,21 @@ unsigned int __device__ plus_scan(unsigned int *x){
 
   for(offset = 1; offset < n; offset *= 2){
     if (i >= offset)
-      y = x[i-offset];
+    y = x[i-offset];
 
     __syncthreads();
 
     if (i >= offset)
-      x[i] = y + x[i];
+    x[i] = y + x[i];
     __syncthreads();
   }
   return x[i];
 }
 
 /*
-    Patition s.t. all values with a 0 at the bit index preceed those with a 1
-    Heavily inspired from Mark Harris' example functions provided in the course
-    materials
+Patition s.t. all values with a 0 at the bit index preceed those with a 1
+Heavily inspired from Mark Harris' example functions provided in the course
+materials
 */
 __device__ void partition_by_bit(unsigned int* d_in, unsigned int bit){
   unsigned int i = threadIdx.x;
@@ -113,32 +116,45 @@ __device__ void partition_by_bit(unsigned int* d_in, unsigned int bit){
 /*
 Kernel function. Put value into appropriate bin.
 */
-__global__ void bin_hist(unsigned int * d_bins, unsigned int* d_in, int size,
-  int numBins){
+__global__ void bin_hist(unsigned int * d_bins, unsigned int* d_in,
+  unsigned int* d_pos, int size, int numBins){
+
     unsigned int b; // bit
 
     // partition by bit
     for (b = 0; b < 8 * sizeof(unsigned int); b+=2 ){
 
-      // mask off a set number of bits each step for AND operation
-      unsigned int mask = (numBins - 1) << b;
+      // TODO which i?
+      // int i = threadIdx.x + blockIdx.x * blockDim.x;
+      int i = threadIdx.x;
+      unsigned int size = blockDim.x;
+      unsigned int x_i = d_in[i];
 
-      int index = threadIdx.x + blockIdx.x * blockDim.x;
+      // p_i is the value of bit at position b
+      unsigned int p_i = (x_i >> b) & 1;
 
-      unsigned int bin = (d_in[index] & mask) >> b;
+      // replace ith value with bit b
+      d_in[i] = p_i;
+      __syncthreads();
 
-      atomicAdd(&(d_bins[bin]), 1);
+      // prefix sum up to this index
+      unsigned int t_before = plus_scan(d_in);
+      // unsigned int t_before = 0;
 
-      // keep threads in lock step. All should have the same b
+      // total number of 1 bits
+      unsigned int t_total = d_in[size-1];
+      unsigned int F_total = size - t_total;
+
+      __syncthreads();
+
+      // if (p_i)
+      //   d_in[t_before-1 + F_total]  = x_i;
+      // else
+      //   d_in[i - t_before] = x_i;
+
+      // keep threads in lock step. All should have the same value for b
       __syncthreads();
     }
-  }
-
-  // perform exclusive prefix sum (scan) on binHistogram to get starting
-  //location for each bin
-  __global__ void prefix_sum(unsigned int * d_pos, unsigned int* d_in, int size) {
-
-
   }
 
   /*
@@ -187,13 +203,13 @@ __global__ void bin_hist(unsigned int * d_bins, unsigned int* d_in, int size,
       cudaMemset(d_binScan, 0, BIN_BYTES);
 
       //perform histogram of data & mask into bins
-      bin_hist<<<blocks, threads>>>(d_binHistogram, d_inputVals, numElems, numBins);
+      bin_hist<<<blocks, threads>>>(d_binHistogram, d_inputVals, d_inputPos, numElems, numBins);
 
       // copy back
-      memcpy(d_outputPos, d_inputPos, BIN_BYTES);
-      memcpy(d_outputVals, d_inputVals, BIN_BYTES);
+      cudaMemcpy(d_outputPos, d_inputPos, BIN_BYTES, cudaMemcpyDeviceToDevice);
+      cudaMemcpy(d_outputVals, d_inputVals, BIN_BYTES, cudaMemcpyDeviceToDevice);
 
       // Free allocated memory
       cudaFree(d_binHistogram);
       cudaFree(d_binScan);
-}
+    }
