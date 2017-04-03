@@ -80,55 +80,26 @@ Patition s.t. all values with a 0 at the bit index preceed those with a 1
 Heavily inspired from Mark Harris' example functions provided in the course
 materials
 */
-__device__ void partition_by_bit(unsigned int* d_in, unsigned int bit){
-  unsigned int i = threadIdx.x;
-  unsigned int size = blockDim.x;
-  // value at position i
-  unsigned int x_i = d_in[i];
-  // mask to get binary value at index bit
-  unsigned int p_i = (x_i >> bit) & 1;
-
-  // replace real value with binary value
-  d_in[i] = p_i;
-  __syncthreads();
-
-  // compute number of 1's and update d_in s.t. it contains the sum of the 1's
-  // from d[0] .. d[i]
-  // TODO
-  unsigned int before = plus_scan(d_in);
-
-
-  // barrier in the plus_scan function means that we are synced at this point
-
-  unsigned int o_total = d_in[size-1]; // number of ones in array
-  unsigned int z_total = size - o_total; // number of zeros
-
-  __syncthreads();
-
-  // rearrage the values. This is a permutation of the array
-  if (p_i)
-    d_in[o_total-1 + z_total] = x_i;
-  else
-    d_in[i - before] = x_i;
-
-}
 
 /*
 Kernel function. Put value into appropriate bin.
 */
-__global__ void bin_hist(unsigned int * d_bins, unsigned int* d_in,
-  unsigned int* d_pos, int size, int numBins){
+__global__ void bin_hist(unsigned int * d_bins,
+  unsigned int* d_in, unsigned int* d_pos,
+  unsigned int* d_out, unsigned int* d_outPos,
+  int size, int numBins){
 
     unsigned int b; // bit
 
     // partition by bit
-    for (b = 0; b < 8 * sizeof(unsigned int); b+=2 ){
+    for (b = 0; b < 8 * sizeof(unsigned int); ++b ){
 
       // TODO which i?
       // int i = threadIdx.x + blockIdx.x * blockDim.x;
       int i = threadIdx.x;
       unsigned int size = blockDim.x;
       unsigned int x_i = d_in[i];
+      unsigned int y_i = d_pos[i];
 
       // p_i is the value of bit at position b
       unsigned int p_i = (x_i >> b) & 1;
@@ -139,21 +110,31 @@ __global__ void bin_hist(unsigned int * d_bins, unsigned int* d_in,
 
       // prefix sum up to this index
       unsigned int t_before = plus_scan(d_in);
-      // unsigned int t_before = 0;
+      if(t_before > 0){
+        // TODO remove sanity check
+        // printf("i:%d v:%d\n", i, t_before);
+      }
 
       // total number of 1 bits
       unsigned int t_total = d_in[size-1];
-      unsigned int F_total = size - t_total;
+      // total number of 0 bits
+      unsigned int f_total = size - t_total;
 
       __syncthreads();
 
-      // if (p_i)
-      //   d_in[t_before-1 + F_total]  = x_i;
-      // else
-      //   d_in[i - t_before] = x_i;
-
+      if (p_i == 1) {
+        d_out[t_before-1 + f_total]  = x_i;
+        d_out[t_before-1 + f_total] = y_i;
+      }
+      else {
+        d_out[i - t_before] = x_i;
+        d_outPos[i - t_before] = y_i;
+      }
       // keep threads in lock step. All should have the same value for b
       __syncthreads();
+      // TODO is this required?
+      // d_in[i] = d_out[i];
+      // __syncthreads();
     }
   }
 
@@ -189,7 +170,9 @@ __global__ void bin_hist(unsigned int * d_bins, unsigned int* d_in,
       unsigned int BIN_BYTES = numBins * sizeof(int);
 
       int threads = 1024;
-      int blocks = numElems/threads;
+      // int blocks = numElems/threads;
+      // TODO
+      int blocks = 1;
 
       // allocate mem
       checkCudaErrors(cudaMalloc((void **) &d_binHistogram, BIN_BYTES));
@@ -203,11 +186,14 @@ __global__ void bin_hist(unsigned int * d_bins, unsigned int* d_in,
       cudaMemset(d_binScan, 0, BIN_BYTES);
 
       //perform histogram of data & mask into bins
-      bin_hist<<<blocks, threads>>>(d_binHistogram, d_inputVals, d_inputPos, numElems, numBins);
+      bin_hist<<<blocks, threads>>>(d_binHistogram, d_inputVals, d_inputPos,
+        d_outputVals, d_inputPos, numElems, numBins);
 
       // copy back
-      cudaMemcpy(d_outputPos, d_inputPos, BIN_BYTES, cudaMemcpyDeviceToDevice);
-      cudaMemcpy(d_outputVals, d_inputVals, BIN_BYTES, cudaMemcpyDeviceToDevice);
+      // cudaMemcpy(d_outputPos, d_inputPos, BIN_BYTES, cudaMemcpyDeviceToDevice);
+      // cudaMemcpy(d_outputPos, d_inputPos, BIN_BYTES, cudaMemcpyDeviceToDevice);
+      // cudaMemcpy(d_inputVals, d_outputPos, BIN_BYTES, cudaMemcpyDeviceToDevice);
+      // cudaMemcpy(d_inputVals, d_outputPos, BIN_BYTES, cudaMemcpyDeviceToDevice);
 
       // Free allocated memory
       cudaFree(d_binHistogram);
