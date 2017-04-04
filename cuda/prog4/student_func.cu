@@ -56,23 +56,66 @@ Radix sort description
 TODO Prefix scan
 Credit goes to Mark Harris at NVIDIA
 */
+// __device__ unsigned int plus_scan(unsigned int* x){
+//   // unsigned int i = threadIdx.x;
+//   unsigned int i = threadIdx.x + blockDim.x * blockIdx.x;
+//   unsigned int n = blockDim.x;
+//   unsigned int offset;
+//   unsigned int y;
+//
+//   for(offset = 1; offset < n; offset *= 2){
+//     if (i >= offset)
+//     y = x[i-offset];
+//
+//     __syncthreads();
+//
+//     if (i >= offset)
+//     x[i] = y + x[i];
+//     __syncthreads();
+//   }
+//   return x[i];
+// }
 __device__ unsigned int plus_scan(unsigned int* x){
-  unsigned int i = threadIdx.x;
-  unsigned int n = blockDim.x;
-  unsigned int offset;
-  unsigned int y;
+  extern __shared__ float temp[];
 
-  for(offset = 1; offset < n; offset *= 2){
-    if (i >= offset)
-    y = x[i-offset];
+  int thid = threadIdx.x;
+  int offset = 1;
 
+  temp[2*thid] = g_idata[2*thid];
+  temp[2*thid+1] = g_idata[2*thid+1];
+
+  for (int d = n>>1; d > 0; d >>= 1) {
     __syncthreads();
 
-    if (i >= offset)
-    x[i] = y + x[i];
-    __syncthreads();
+    if (thid < d) {
+      int ai = offset*(2*thid+1) - 1;
+      int bi = offset*(2*thid+2) - 1;
+
+      temp[bi] += temp[ai];
+    }
+    offset *= 2;
   }
-  return x[i];
+
+  if (thid == 0) { temp[n-1]  = 0; }
+
+  for (int d = 1; d<n; d *= 2) {
+    offset >>=1;
+    __syncthreads();
+
+    if (thid < d)
+    {
+      int ai = offset*(2*thid+1) - 1;
+      int bi = offset*(2*thid+2) - 1;
+
+      float t = temp[ai];
+      temp[ai] = temp[bi];
+      temp[bi] += 1;
+    }
+  }
+  __syncthreads();
+
+  x_out[2*thid] = temp[2*thid];
+  x_out[2*thid+1] = temp[2*thid+1];
 }
 
 /*
@@ -94,9 +137,8 @@ __global__ void bin_hist(unsigned int * d_bins,
     // partition by bit
     for (b = 0; b < 8 * sizeof(unsigned int); ++b ){
 
-      // TODO which i?
-      // int i = threadIdx.x + blockIdx.x * blockDim.x;
-      int i = threadIdx.x;
+      int i = threadIdx.x + blockIdx.x * blockDim.x;
+      // int i = threadIdx.x;
       unsigned int size = blockDim.x;
       unsigned int x_i = d_in[i];
       unsigned int y_i = d_pos[i];
@@ -124,7 +166,7 @@ __global__ void bin_hist(unsigned int * d_bins,
 
       if (p_i == 1) {
         d_out[t_before-1 + f_total]  = x_i;
-        d_out[t_before-1 + f_total] = y_i;
+        d_outPos[t_before-1 + f_total] = y_i;
       }
       else {
         d_out[i - t_before] = x_i;
@@ -170,9 +212,9 @@ __global__ void bin_hist(unsigned int * d_bins,
       unsigned int BIN_BYTES = numBins * sizeof(int);
 
       int threads = 1024;
-      // int blocks = numElems/threads;
+      // int blocks = (numElems-1)/threads + 1;
       // TODO
-      int blocks = 1;
+      int blocks = 28;
 
       // allocate mem
       checkCudaErrors(cudaMalloc((void **) &d_binHistogram, BIN_BYTES));
