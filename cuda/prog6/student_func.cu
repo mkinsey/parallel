@@ -67,6 +67,28 @@
     In this assignment we will do 800 iterations.
    */
 
+  /*
+     1) Compute a mask of the pixels from the source image to be copied
+        The pixels that shouldn't be copied are completely white, they
+        have R=255, G=255, B=255.  Any other pixels SHOULD be copied.
+  */
+__global__ void mask_source(const uchar4* const h_src, unsigned char* d_mask,
+const int numRows, const int numCols){
+  int x_i = threadIdx.x + blockIdx.x * blockDim.x;
+  int y_i = threadIdx.y + blockIdx.y * blockDim.y;
+  int index = x_i + y_i * numCols;
+
+  if(index < numRows * numCols){
+    if(h_src[index].x == 255 &&
+      h_src[index].y == 255 &&
+      h_src[index].z == 255) {
+        d_mask[index] = 0;
+      } else {
+        d_mask[index] = 1;
+      }
+  }
+}
+
 void your_blend(const uchar4* const h_sourceImg,  //IN
                 const size_t numRowsSource, const size_t numColsSource,
                 const uchar4* const h_destImg, //IN
@@ -74,16 +96,19 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
 {
 
   unsigned char* d_src_mask;
-  const unsigned int size_bytes = numColsSource * numRowsSource *
-    sizeof(unsigned char);
+  const unsigned int size_bytes = numColsSource * numRowsSource * sizeof(unsigned char);
+  const dim3 threads(32, 32);
+  const dim3 blocks(ceil((float)numRowsSource/threads.x), ceil((float)numColsSource/threads.y));
+
+  // declare memory
+  checkCudaErrors(cudaMalloc(&d_src_mask, size_bytes));
   /*
      1) Compute a mask of the pixels from the source image to be copied
         The pixels that shouldn't be copied are completely white, they
         have R=255, G=255, B=255.  Any other pixels SHOULD be copied.
   */
-  checkCudaErrors(cudaMalloc(&d_src_mask, size_bytes));
-  // mask_source<<blocks, grids>>>(h_sourceImg);
-  // cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+  mask_source<<<blocks, threads>>>(h_sourceImg, d_src_mask, size_bytes, numColsSource);
+  cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
   /*
      2) Compute the interior and border regions of the mask.  An interior
         pixel has all 4 neighbors also inside the mask.  A border pixel is
@@ -137,4 +162,7 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
     //
     // checkResultsEps((unsigned char *)h_reference, (unsigned char *)h_blendedImg, 4 * size_bytes, 2, .01);
     // delete[] h_reference;
+
+    // free allocated memory
+    checkCudaErrors(cudaFree(d_src_mask));
 }
