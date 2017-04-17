@@ -2,6 +2,7 @@
 //Poisson Blending
 
 #include "utils.h"
+#include "stdio.h"
 #include <thrust/host_vector.h>
 #include "reference_calc.cpp"
 #define N_ITERATIONS 800
@@ -73,19 +74,30 @@
         have R=255, G=255, B=255.  Any other pixels SHOULD be copied.
   */
 __global__ void mask_source(const uchar4* const h_src, unsigned char* d_mask,
-const int numRows, const int numCols){
+const size_t numRows, const size_t numCols){
   int x_i = threadIdx.x + blockIdx.x * blockDim.x;
   int y_i = threadIdx.y + blockIdx.y * blockDim.y;
-  int index = x_i + y_i * numCols;
+  int i = x_i + y_i * numCols;
 
-  if(index < numRows * numCols){
-    if(h_src[index].x == 255 &&
-      h_src[index].y == 255 &&
-      h_src[index].z == 255) {
-        d_mask[index] = 0;
-      } else {
-        d_mask[index] = 1;
-      }
+  if(i < numRows * numCols){
+    d_mask[i] = (h_src[i].x + h_src[i].y + h_src[i].z < 3 * 255) ? 1 : 0;
+  }
+}
+  /*
+     2) Compute the interior and border regions of the mask.  An interior
+        pixel has all 4 neighbors also inside the mask.  A border pixel is
+        in the mask itself, but has at least one neighbor that isn't.
+  */
+__global__ void mask_interior(unsigned char* mask, unsigned char* border,
+  unsigned char* strictInterior, const size_t numRows, const size_t numCols){
+  int x_i = threadIdx.x + blockIdx.x * blockDim.x;
+  int y_i = threadIdx.y + blockIdx.y * blockDim.y;
+  int i = x_i + y_i * numCols;
+
+  if(i < numRows * numCols){
+    if(mask[i]){
+      printf("%d\n", i);
+    }
   }
 }
 
@@ -96,24 +108,36 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
 {
 
   unsigned char* d_src_mask;
-  const unsigned int size_bytes = numColsSource * numRowsSource * sizeof(unsigned char);
+  unsigned char* d_border;
+  unsigned char* d_strictInterior;
+  uchar4* d_src;
+
+  const unsigned int size = numColsSource * numRowsSource;
   const dim3 threads(32, 32);
-  const dim3 blocks(ceil((float)numRowsSource/threads.x), ceil((float)numColsSource/threads.y));
+  const dim3 blocks(ceil((float)numColsSource/threads.x), ceil((float)numRowsSource/threads.y));
 
   // declare memory
-  checkCudaErrors(cudaMalloc(&d_src_mask, size_bytes));
+  checkCudaErrors(cudaMalloc(&d_src_mask, size * sizeof(unsigned char)));
+  checkCudaErrors(cudaMalloc(&d_border, size * sizeof(unsigned char)));
+  checkCudaErrors(cudaMalloc(&d_strictInterior, size * sizeof(unsigned char)));
+  checkCudaErrors(cudaMalloc(&d_src, size * sizeof(uchar4)));
+
+  checkCudaErrors(cudaMemcpy(d_src, h_sourceImg, size * sizeof(uchar4), cudaMemcpyHostToDevice));
   /*
      1) Compute a mask of the pixels from the source image to be copied
         The pixels that shouldn't be copied are completely white, they
         have R=255, G=255, B=255.  Any other pixels SHOULD be copied.
   */
-  mask_source<<<blocks, threads>>>(h_sourceImg, d_src_mask, size_bytes, numColsSource);
+  mask_source<<<blocks, threads>>>(d_src, d_src_mask, numRowsSource, numColsSource);
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
   /*
      2) Compute the interior and border regions of the mask.  An interior
         pixel has all 4 neighbors also inside the mask.  A border pixel is
         in the mask itself, but has at least one neighbor that isn't.
   */
+  mask_interior<<<blocks, threads>>>(d_src_mask, d_border, d_strictInterior,
+    numRowsSource, numColsSource);
+  cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
   /*
      3) Separate out the incoming image into three separate channels
@@ -165,4 +189,5 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
 
     // free allocated memory
     checkCudaErrors(cudaFree(d_src_mask));
+    checkCudaErrors(cudaFree(d_src));
 }
