@@ -119,7 +119,7 @@ __global__ void mask_interior(unsigned char* mask, unsigned char* border,
     // observe array bounds
     if(x_i > 0 && x_i < numCols-1){
 
-      if(y_i > 0 && x_i < numRows-1){
+      if(y_i > 0 && y_i < numRows-1){
 
         // pixel must be inside mask
         if(mask[i]){
@@ -220,6 +220,11 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
   checkCudaErrors(cudaMalloc(&d_blue1, size_float));
   checkCudaErrors(cudaMalloc(&d_blue2, size_float));
 
+  // init masks
+  checkCudaErrors(cudaMemset(d_src_mask, 0, size_char));
+  checkCudaErrors(cudaMemset(d_border, 0, size_char));
+  checkCudaErrors(cudaMemset(d_strictInterior, 0, size_char));
+
   // source image on device
   checkCudaErrors(cudaMalloc(&d_src, size * sizeof(uchar4)));
   checkCudaErrors(cudaMemcpy(d_src, h_sourceImg, size * sizeof(uchar4), cudaMemcpyHostToDevice));
@@ -293,9 +298,10 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
   */
   checkCudaErrors(cudaMalloc(&d_mask_test, size * sizeof(uchar4)));
   checkCudaErrors(cudaMemset(d_mask_test, 0, size * sizeof(uchar4)));
+
+  // first arg can be: d_src_mask, d_border, d_strictInterior
   visualize_mask<<<blocks, threads>>>(d_border, d_mask_test, numRowsSource, numColsSource);
   checkCudaErrors(cudaMemcpy(h_blendedImg, d_mask_test, size * sizeof(uchar4), cudaMemcpyDeviceToHost));
-
   // END DEBUG
 
 
