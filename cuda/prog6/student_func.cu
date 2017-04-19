@@ -84,41 +84,121 @@
         if(interior[i]){
 
           // cue horrible workload imbalance...
+          int neighbor_i;
           for (int n=0; n < N_ITERATIONS; n++){
             float rSum = 0;
-            float g = 0;
+            float gSum = 0;
             float bSum = 0;
 
-            r2[i] += r1[i];
-            g2[i] += g1[i];
-            b2[i] += b1[i];
+            // 1
+            neighbor_i = i - numCols;
 
-            if(interior[(y_i - 1) * numCols + x_i - 1]) {
-              // add..
+            if(interior[neighbor_i]) {
+              // add prev neighbors (A)
+              rSum += r1[neighbor_i];
+              gSum += g1[neighbor_i];
+              bSum += b1[neighbor_i];
             }
+            else if (border[neighbor_i]) {
+              // add dest val (B)
+              rSum += dest[neighbor_i].x;
+              gSum += dest[neighbor_i].y;
+              bSum += dest[neighbor_i].z;
+            }
+            // sum += SourceImg[p] - SourceImg[neighbor]   (for all four neighbors)
+            // (C)
+            rSum += src[i].x - src[neighbor_i].x;
+            gSum += src[i].y - src[neighbor_i].y;
+            bSum += src[i].z - src[neighbor_i].z;
 
-            //TODO remove
-            r2[i] /= 2;
-            g2[i] /=2;
-            b2[i] /=2;
+            // 2
+            neighbor_i = i + numCols;
+
+            if(interior[neighbor_i]) {
+              // add prev neighbors (A)
+              rSum += r1[neighbor_i];
+              gSum += g1[neighbor_i];
+              bSum += b1[neighbor_i];
+            }
+            else if (border[neighbor_i]) {
+              // add dest val (B)
+              rSum += dest[neighbor_i].x;
+              gSum += dest[neighbor_i].y;
+              bSum += dest[neighbor_i].z;
+            }
+            // sum += SourceImg[p] - SourceImg[neighbor]   (for all four neighbors)
+            // (C)
+            rSum += src[i].x - src[neighbor_i].x;
+            gSum += src[i].y - src[neighbor_i].y;
+            bSum += src[i].z - src[neighbor_i].z;
+
+            // 3
+            neighbor_i = i - 1;
+
+            if(interior[neighbor_i]) {
+              // add prev neighbors (A)
+              rSum += r1[neighbor_i];
+              gSum += g1[neighbor_i];
+              bSum += b1[neighbor_i];
+            }
+            else if (border[neighbor_i]) {
+              // add dest val (B)
+              rSum += dest[neighbor_i].x;
+              gSum += dest[neighbor_i].y;
+              bSum += dest[neighbor_i].z;
+            }
+            // sum += SourceImg[p] - SourceImg[neighbor]   (for all four neighbors)
+            // (C)
+            rSum += src[i].x - src[neighbor_i].x;
+            gSum += src[i].y - src[neighbor_i].y;
+            bSum += src[i].z - src[neighbor_i].z;
+
+            // 4
+            neighbor_i = i + 1;
+
+            if(interior[neighbor_i]) {
+              // add prev neighbors (A)
+              rSum += r1[neighbor_i];
+              gSum += g1[neighbor_i];
+              bSum += b1[neighbor_i];
+            }
+            else if (border[neighbor_i]) {
+              // add dest val (B)
+              rSum += dest[neighbor_i].x;
+              gSum += dest[neighbor_i].y;
+              bSum += dest[neighbor_i].z;
+            }
+            // sum += SourceImg[p] - SourceImg[neighbor]   (for all four neighbors)
+            // (C)
+            rSum += src[i].x - src[neighbor_i].x;
+            gSum += src[i].y - src[neighbor_i].y;
+            bSum += src[i].z - src[neighbor_i].z;
+
+            // divide by num neighbors
+            rSum /= 4.f;
+            gSum /= 4.f;
+            bSum /= 4.f;
 
             //clamp to [0, 255]
-            r2[i] = min(255, max(0, r2[i]));
-            g2[i] = min(255, max(0, g2[i]));
-            b2[i] = min(255, max(0, b2[i]));
-          }
-          // mask[(y_i - 1)* numCols + x_i] + mask[(y_i + 1) * numCols + x_i] &&
-          // mask[y_i * numCols + x_i -1] && mask[y_i * numCols + x_i + 1]){
-          //   strictInterior[i] = 1;
-          //   border[i] = 0;
-          }
-          else {
+            r2[i] = min(255.f, max(0.f, rSum));
+            g2[i] = min(255.f, max(0.f, gSum));
+            b2[i] = min(255.f, max(0.f, bSum));
+
+            __syncthreads();
+            // move to 'previous' guess
+            r1[i] = r2[i];
+            g1[i] = g2[i];
+            b1[i] = b2[i];
+            __syncthreads();
           }
         }
         else {
         }
       }
+      else {
+      }
     }
+  }
 
   //  __device__ void guess_pixel(float *r1, float* r2, unsigned char *border,
   //  unsigned char *interior, const size_t numCols){
@@ -351,7 +431,6 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
         in the destination image with the result of the Jacobi iterations.
         Just cast the floating point values to unsigned chars since we have
         already made sure to clamp them to the correct range.
-
   */
   combine_image<<<blocks, threads>>>(d_dest, d_strictInterior, d_red2, d_green2, d_blue2,
     numRowsSource, numColsSource);
