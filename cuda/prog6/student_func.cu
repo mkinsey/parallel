@@ -67,30 +67,40 @@
 
     In this assignment we will do 800 iterations.
    */
-   __global__ void jacobi(float *r1, float *r2, float*g1, float *g2,
-     float* b1, float* b2, unsigned char *border, unsigned char *interior,
-   const size_t numRows, const size_t numCols){
+   __global__ void jacobi(const uchar4 *src, const uchar4 *dest, float *r1,
+     float *r2, float*g1, float *g2, float* b1, float* b2, unsigned char *border,
+     unsigned char *interior, const size_t numRows, const size_t numCols){
 
     int x_i = threadIdx.x + blockIdx.x * blockDim.x; // Column
     int y_i = threadIdx.y + blockIdx.y * blockDim.y; // Row
-    int i = y_i * numCols + x_i; // Row-ordered index in array
 
     // observe array bounds
     if(x_i > 0 && x_i < numCols-1){
 
       if(y_i > 0 && y_i < numRows-1){
+        int i = y_i * numCols + x_i; // Row-ordered index in array
 
         // pixel must be in interior
         if(interior[i]){
 
+          // cue horrible workload imbalance...
           for (int n=0; n < N_ITERATIONS; n++){
-            // float rSum = 0;
-            // float g = 0;
-            // float bSum = 0;
+            float rSum = 0;
+            float g = 0;
+            float bSum = 0;
 
-            if(interior[(y_i - 1) * numCols + x_i - 1]) {
-              // rSum +=
-            }
+            r2[i] += r1[i];
+            g2[i] += g1[i];
+            b2[i] += b1[i];
+
+            //TODO remove 
+            r2[i] /= 2;
+            g2[i] /=2;
+            b2[i] /=2;
+
+            // if(interior[(y_i - 1) * numCols + x_i - 1]) {
+            //   // rSum +=
+            // }
           }
           // mask[(y_i - 1)* numCols + x_i] + mask[(y_i + 1) * numCols + x_i] &&
           // mask[y_i * numCols + x_i -1] && mask[y_i * numCols + x_i + 1]){
@@ -328,8 +338,8 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
      5) For each color channel perform the Jacobi iteration described
         above 800 times.
   */
-  // jacobi<<<blocks, threads>>>(d_src, d_red1, d_red2
-  // );
+  jacobi<<<blocks, threads>>>(d_src, d_dest, d_red1, d_red2, d_green1, d_green2,
+    d_blue1, d_blue2, d_border, d_strictInterior, numRowsSource, numColsSource);
 
   /*
      6) Create the output image by replacing all the interior pixels
@@ -341,17 +351,6 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
   combine_image<<<blocks, threads>>>(d_dest, d_strictInterior, d_red2, d_green2, d_blue2,
     numRowsSource, numColsSource);
   checkCudaErrors(cudaMemcpy(h_blendedImg, d_dest, size * sizeof(uchar4), cudaMemcpyDeviceToHost));
-
-  /* The reference calculation is provided below, feel free to use it
-     for debugging purposes.
-   */
-
-    // uchar4* h_reference = new uchar4[size];
-    // reference_calc(h_sourceImg, numRowsSource, numColsSource,
-    //                h_destImg, h_reference);
-
-    // checkResultsEps((unsigned char *)h_reference, (unsigned char *)h_blendedImg, 4 * size, 2, .01);
-    // delete[] h_reference;
 
   //
   // DEBUG MASK
