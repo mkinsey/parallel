@@ -67,12 +67,53 @@
 
     In this assignment we will do 800 iterations.
    */
+   __global__ void jacobi(float *r1, float *r2, float*g1, float *g2,
+     float* b1, float* b2, unsigned char *border, unsigned char *interior,
+   const size_t numRows, const size_t numCols){
+
+    int x_i = threadIdx.x + blockIdx.x * blockDim.x; // Column
+    int y_i = threadIdx.y + blockIdx.y * blockDim.y; // Row
+    int i = y_i * numCols + x_i; // Row-ordered index in array
+
+    // observe array bounds
+    if(x_i > 0 && x_i < numCols-1){
+
+      if(y_i > 0 && y_i < numRows-1){
+
+        // pixel must be in interior
+        if(interior[i]){
+
+          for (int n=0; n < N_ITERATIONS; n++){
+            // float rSum = 0;
+            // float g = 0;
+            // float bSum = 0;
+
+            if(interior[(y_i - 1) * numCols + x_i - 1]) {
+              // rSum +=
+            }
+          }
+          // mask[(y_i - 1)* numCols + x_i] + mask[(y_i + 1) * numCols + x_i] &&
+          // mask[y_i * numCols + x_i -1] && mask[y_i * numCols + x_i + 1]){
+          //   strictInterior[i] = 1;
+          //   border[i] = 0;
+          }
+          else {
+          }
+        }
+        else {
+        }
+      }
+    }
+
+  //  __device__ void guess_pixel(float *r1, float* r2, unsigned char *border,
+  //  unsigned char *interior, const size_t numCols){
+   //
+  //  }
 
   /*
      1) Compute a mask of the pixels from the source image to be copied
         The pixels that shouldn't be copied are completely white, they
         have R=255, G=255, B=255.  Any other pixels SHOULD be copied.
-        TODO: test
   */
 __global__ void mask_source(const uchar4* const h_src, unsigned char* d_mask,
 const size_t numRows, const size_t numCols){
@@ -81,6 +122,7 @@ const size_t numRows, const size_t numCols){
   int i = x_i + y_i * numCols;
 
   if(i < numRows * numCols){
+    // set to 1 if not white
     d_mask[i] = (h_src[i].x + h_src[i].y + h_src[i].z < 3 * 255) ? 1 : 0;
   }
 }
@@ -107,8 +149,6 @@ const size_t numRows, const size_t numCols){
      2) Compute the interior and border regions of the mask.  An interior
         pixel has all 4 neighbors also inside the mask.  A border pixel is
         in the mask itself, but has at least one neighbor that isn't.
-        TODO: finish
-        TODO: test
   */
 __global__ void mask_interior(unsigned char* mask, unsigned char* border,
   unsigned char* strictInterior, const size_t numRows, const size_t numCols){
@@ -145,7 +185,7 @@ __global__ void mask_interior(unsigned char* mask, unsigned char* border,
 
   /*
      3) Separate out the incoming image into three separate channels
-      TODO: test
+      TODO: remove?
   */
 __global__ void separate_channels(const uchar4* d_src,
   unsigned char* d_red, unsigned char* d_green, unsigned char* d_blue,
@@ -183,6 +223,28 @@ __global__ void init_buffers(const uchar4* d_src,
     b2[i] = d_src[i].z;
   }
 }
+  /*
+     6) Create the output image by replacing all the interior pixels
+        in the destination image with the result of the Jacobi iterations.
+        Just cast the floating point values to unsigned chars since we have
+        already made sure to clamp them to the correct range.
+  */
+__global__ void combine_image(uchar4* d_out, unsigned char *interior,
+  float *d_red, float *d_blue, float *d_green,
+  const size_t numRows, const size_t numCols){
+
+  int x_i = threadIdx.x + blockIdx.x * blockDim.x;
+  int y_i = threadIdx.y + blockIdx.y * blockDim.y;
+  int i = x_i + y_i * numCols;
+
+  if(i < numRows * numCols){
+      if(interior[i]){
+        d_out[i].x = (unsigned char) d_red[i];
+        d_out[i].y = (unsigned char) d_green[i];
+        d_out[i].z = (unsigned char) d_blue[i];
+      }
+  }
+}
 
 void your_blend(const uchar4* const h_sourceImg,  //IN
                 const size_t numRowsSource, const size_t numColsSource,
@@ -194,8 +256,7 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
   unsigned char* d_src_mask, *d_border, *d_strictInterior;
   unsigned char *d_redSrc, *d_greenSrc, *d_blueSrc;
   float *d_red1, *d_red2, *d_green1, *d_green2, *d_blue1, *d_blue2;
-  uchar4* d_src;
-  uchar4* d_mask_test;
+  uchar4 *d_src, *d_dest, *d_mask_test;
 
   // computation vars
   const unsigned int size = numColsSource * numRowsSource;
@@ -225,9 +286,11 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
   checkCudaErrors(cudaMemset(d_border, 0, size_char));
   checkCudaErrors(cudaMemset(d_strictInterior, 0, size_char));
 
-  // source image on device
+  // images on device
   checkCudaErrors(cudaMalloc(&d_src, size * sizeof(uchar4)));
   checkCudaErrors(cudaMemcpy(d_src, h_sourceImg, size * sizeof(uchar4), cudaMemcpyHostToDevice));
+  checkCudaErrors(cudaMalloc(&d_dest, size * sizeof(uchar4)));
+  checkCudaErrors(cudaMemcpy(d_dest, h_destImg, size * sizeof(uchar4), cudaMemcpyHostToDevice));
 
   /*
      1) Compute a mask of the pixels from the source image to be copied
@@ -254,7 +317,7 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
   //   d_blueSrc, numRowsSource, numColsSource);
 
   /*
-     4) Create two float(!) buffers for each color channel that will
+     4) Create two float buffers for each color channel that will
         act as our guesses.  Initialize them to the respective color
         channel of the source image since that will act as our intial guess.
   */
@@ -265,6 +328,8 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
      5) For each color channel perform the Jacobi iteration described
         above 800 times.
   */
+  // jacobi<<<blocks, threads>>>(d_src, d_red1, d_red2
+  // );
 
   /*
      6) Create the output image by replacing all the interior pixels
@@ -272,15 +337,10 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
         Just cast the floating point values to unsigned chars since we have
         already made sure to clamp them to the correct range.
 
-      Since this is final assignment we provide little boilerplate code to
-      help you.  Notice that all the input/output pointers are HOST pointers.
-
-      You will have to allocate all of your own GPU memory and perform your own
-      memcopies to get data in and out of the GPU memory.
-
   */
-
-
+  combine_image<<<blocks, threads>>>(d_dest, d_strictInterior, d_red2, d_green2, d_blue2,
+    numRowsSource, numColsSource);
+  checkCudaErrors(cudaMemcpy(h_blendedImg, d_dest, size * sizeof(uchar4), cudaMemcpyDeviceToHost));
 
   /* The reference calculation is provided below, feel free to use it
      for debugging purposes.
@@ -293,26 +353,27 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
     // checkResultsEps((unsigned char *)h_reference, (unsigned char *)h_blendedImg, 4 * size, 2, .01);
     // delete[] h_reference;
 
-  /*
-      DEBUG MASK
-  */
-  checkCudaErrors(cudaMalloc(&d_mask_test, size * sizeof(uchar4)));
-  checkCudaErrors(cudaMemset(d_mask_test, 0, size * sizeof(uchar4)));
+  //
+  // DEBUG MASK
+  //
+  // checkCudaErrors(cudaMalloc(&d_mask_test, size * sizeof(uchar4)));
+  // checkCudaErrors(cudaMemset(d_mask_test, 0, size * sizeof(uchar4)));
 
   // first arg can be: d_src_mask, d_border, d_strictInterior
-  visualize_mask<<<blocks, threads>>>(d_border, d_mask_test, numRowsSource, numColsSource);
-  checkCudaErrors(cudaMemcpy(h_blendedImg, d_mask_test, size * sizeof(uchar4), cudaMemcpyDeviceToHost));
+  // visualize_mask<<<blocks, threads>>>(d_border, d_mask_test, numRowsSource, numColsSource);
+  // checkCudaErrors(cudaMemcpy(h_blendedImg, d_mask_test, size * sizeof(uchar4), cudaMemcpyDeviceToHost));
+  // checkCudaErrors(cudaFree(d_mask_test));
   // END DEBUG
 
 
     // free allocated memory
     checkCudaErrors(cudaFree(d_src_mask));
     checkCudaErrors(cudaFree(d_src));
+    checkCudaErrors(cudaFree(d_dest));
     checkCudaErrors(cudaFree(d_border));
     checkCudaErrors(cudaFree(d_strictInterior));
     checkCudaErrors(cudaFree(d_redSrc));
     checkCudaErrors(cudaFree(d_greenSrc));
     checkCudaErrors(cudaFree(d_blueSrc));
-    checkCudaErrors(cudaFree(d_mask_test));
 
 }
