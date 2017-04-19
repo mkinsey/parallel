@@ -93,14 +93,19 @@
             g2[i] += g1[i];
             b2[i] += b1[i];
 
-            //TODO remove 
+            if(interior[(y_i - 1) * numCols + x_i - 1]) {
+              // add..
+            }
+
+            //TODO remove
             r2[i] /= 2;
             g2[i] /=2;
             b2[i] /=2;
 
-            // if(interior[(y_i - 1) * numCols + x_i - 1]) {
-            //   // rSum +=
-            // }
+            //clamp to [0, 255]
+            r2[i] = min(255, max(0, r2[i]));
+            g2[i] = min(255, max(0, g2[i]));
+            b2[i] = min(255, max(0, b2[i]));
           }
           // mask[(y_i - 1)* numCols + x_i] + mask[(y_i + 1) * numCols + x_i] &&
           // mask[y_i * numCols + x_i -1] && mask[y_i * numCols + x_i + 1]){
