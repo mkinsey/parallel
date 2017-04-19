@@ -90,7 +90,6 @@
 
           // cue horrible workload imbalance...
           int neighbor_i;
-          for (int n=0; n < N_ITERATIONS; n++){
             float rSum = 0;
             float gSum = 0;
             float bSum = 0;
@@ -198,13 +197,6 @@
             g2[i] = min(255.f, max(0.f, gSum));
             b2[i] = min(255.f, max(0.f, bSum));
 
-            __syncthreads();
-            // move to 'previous' guess
-            r1[i] = r2[i];
-            g1[i] = g2[i];
-            b1[i] = b2[i];
-            __syncthreads();
-          }
         }
       }
     }
@@ -335,7 +327,7 @@ __global__ void init_buffers(const uchar4* d_src,
         already made sure to clamp them to the correct range.
   */
 __global__ void combine_image(uchar4* d_out, unsigned char *interior,
-  float *d_red, float *d_blue, float *d_green,
+  float *d_red, float *d_green, float *d_blue,
   const size_t numRows, const size_t numCols){
 
   int x_i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -349,6 +341,12 @@ __global__ void combine_image(uchar4* d_out, unsigned char *interior,
         d_out[i].z = (unsigned char) d_blue[i];
       }
   }
+}
+
+void swap(float **a, float **b){
+  float* tmp = *b;
+  *b = *a;
+  *a = tmp;
 }
 
 void your_blend(const uchar4* const h_sourceImg,  //IN
@@ -428,13 +426,22 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
   */
   init_buffers<<<blocks, threads>>>(d_src, d_red1, d_red2, d_green1, d_green2,
   d_blue1, d_blue2, numRowsSource, numColsSource);
+  cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
   /*
      5) For each color channel perform the Jacobi iteration described
         above 800 times.
   */
-  jacobi<<<blocks, threads>>>(d_src, d_dest, d_red1, d_red2, d_green1, d_green2,
-    d_blue1, d_blue2, d_border, d_strictInterior, numRowsSource, numColsSource);
+  for(int n=0; n<N_ITERATIONS; n++){
+    jacobi<<<blocks, threads>>>(d_src, d_dest, d_red1, d_red2, d_green1, d_green2,
+      d_blue1, d_blue2, d_border, d_strictInterior, numRowsSource, numColsSource);
+    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
+
+    // swap pointers, new vals (2) become previous vals (1)
+    swap(&d_red1, &d_red2);
+    swap(&d_green1, &d_green2);
+    swap(&d_blue1, &d_blue2);
+  }
 
   /*
      6) Create the output image by replacing all the interior pixels
@@ -465,8 +472,16 @@ void your_blend(const uchar4* const h_sourceImg,  //IN
     checkCudaErrors(cudaFree(d_dest));
     checkCudaErrors(cudaFree(d_border));
     checkCudaErrors(cudaFree(d_strictInterior));
+
     checkCudaErrors(cudaFree(d_redSrc));
     checkCudaErrors(cudaFree(d_greenSrc));
     checkCudaErrors(cudaFree(d_blueSrc));
+
+    checkCudaErrors(cudaFree(d_red1));
+    checkCudaErrors(cudaFree(d_red2));
+    checkCudaErrors(cudaFree(d_green1));
+    checkCudaErrors(cudaFree(d_green2));
+    checkCudaErrors(cudaFree(d_blue1));
+    checkCudaErrors(cudaFree(d_blue2));
 
 }
