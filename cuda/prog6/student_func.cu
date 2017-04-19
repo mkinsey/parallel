@@ -80,6 +80,11 @@
       if(y_i > 0 && y_i < numRows-1){
         int i = y_i * numCols + x_i; // Row-ordered index in array
 
+        if(border[i]){
+          r2[i] = dest[i].x;
+          g2[i] = dest[i].y;
+          b2[i] = dest[i].z;
+        }
         // pixel must be in interior
         if(interior[i]){
 
@@ -89,6 +94,7 @@
             float rSum = 0;
             float gSum = 0;
             float bSum = 0;
+            float num_neighbors = 0;
 
             // 1
             neighbor_i = i - numCols;
@@ -98,12 +104,14 @@
               rSum += r1[neighbor_i];
               gSum += g1[neighbor_i];
               bSum += b1[neighbor_i];
+              num_neighbors += 1;
             }
             else if (border[neighbor_i]) {
               // add dest val (B)
               rSum += dest[neighbor_i].x;
               gSum += dest[neighbor_i].y;
               bSum += dest[neighbor_i].z;
+              num_neighbors += 1;
             }
             // sum += SourceImg[p] - SourceImg[neighbor]   (for all four neighbors)
             // (C)
@@ -119,12 +127,14 @@
               rSum += r1[neighbor_i];
               gSum += g1[neighbor_i];
               bSum += b1[neighbor_i];
+              num_neighbors += 1;
             }
             else if (border[neighbor_i]) {
               // add dest val (B)
               rSum += dest[neighbor_i].x;
               gSum += dest[neighbor_i].y;
               bSum += dest[neighbor_i].z;
+              num_neighbors += 1;
             }
             // sum += SourceImg[p] - SourceImg[neighbor]   (for all four neighbors)
             // (C)
@@ -140,12 +150,14 @@
               rSum += r1[neighbor_i];
               gSum += g1[neighbor_i];
               bSum += b1[neighbor_i];
+              num_neighbors += 1;
             }
             else if (border[neighbor_i]) {
               // add dest val (B)
               rSum += dest[neighbor_i].x;
               gSum += dest[neighbor_i].y;
               bSum += dest[neighbor_i].z;
+              num_neighbors += 1;
             }
             // sum += SourceImg[p] - SourceImg[neighbor]   (for all four neighbors)
             // (C)
@@ -161,12 +173,14 @@
               rSum += r1[neighbor_i];
               gSum += g1[neighbor_i];
               bSum += b1[neighbor_i];
+              num_neighbors += 1;
             }
             else if (border[neighbor_i]) {
               // add dest val (B)
               rSum += dest[neighbor_i].x;
               gSum += dest[neighbor_i].y;
               bSum += dest[neighbor_i].z;
+              num_neighbors += 1;
             }
             // sum += SourceImg[p] - SourceImg[neighbor]   (for all four neighbors)
             // (C)
@@ -175,9 +189,9 @@
             bSum += src[i].z - src[neighbor_i].z;
 
             // divide by num neighbors
-            rSum /= 4.f;
-            gSum /= 4.f;
-            bSum /= 4.f;
+            rSum /= num_neighbors;
+            gSum /= num_neighbors;
+            bSum /= num_neighbors;
 
             //clamp to [0, 255]
             r2[i] = min(255.f, max(0.f, rSum));
@@ -192,10 +206,6 @@
             __syncthreads();
           }
         }
-        else {
-        }
-      }
-      else {
       }
     }
   }
