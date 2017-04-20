@@ -1,0 +1,53 @@
+\documentclass{article}
+
+\begin{document}
+\title{CUDA Program Six}
+\author{Michael Kinsey}
+\date{21 April 2017}
+\maketitle
+
+In this program I present a solution to Problem Set 6 from Udacity's \textit{Intro
+to Parallel Programming} course. This program implements a parallel algorithm for
+seamless image cloning. The goal is to blend a source image (in our case a polar bear) 
+onto a destination image (a swimming pool). This problem set uses the jacobi method 
+for a Poisson equation to calculate the pixel values of the blended image.  All 
+modified functions are in the \textit{student\_func.cu} file. Execution time 
+through the Udacity interface was around 62 ms.
+
+The first step involves creating a mask for the source image. By the problem 
+specification, any non-white pixels should be included in the blended image.
+This mask gives us a quick way to check if the pixel is inside of the desired
+region of the source image.
+
+Next, two more masks are created based on the previous step. The immediate 
+border and the strict interior region are calculated and stored in two arrays. 
+The strict interior requires all four of its neighbors to be inside the mask, 
+while a border pixel is in the mask itself but has $\geq$ 1 neighbor that is not.
+These masks are used in the jacobi iterations to solve for the blended pixel 
+values.
+
+The jacobi iterations use a double buffering technique to calculate new values
+based on the previous iteration's values. We create two buffers for each color
+channel (R, G, B) and initialize them using the values of the source image. This
+is effectively our first guess. 
+
+Finally, we may begin an iteration. For each pixel in the strict interior of 
+the mask, we will calculate a pixel value based on the pixel's neighbors. If 
+the neighbor is in the interior, average the sum of its neighbor's previous 
+values with the difference between the source pixel's value and the neighbor's 
+source value. If the neighbor is on the border of the image, average the 
+neighbor's destination image value with the difference between the source pixel's
+value and the neighbor's source value. We continue in this fashion for each 
+iteration, updating one buffer's values based on the results in the previous 
+buffer, swapping pointers to the buffer at each iteration.
+
+Optimizations to this program included loop unfolding, and combining steps when
+possible. For example, the color channels are only separated when the double 
+buffers are being initalized. An example of loop unfolding is calculating 
+all color channels in the same loop, even though a single loop would reduce
+code reduncancy. Further optimizations could be made by precomputing some values,
+and only assigning threads to the masked region of the image for the jacobi 
+iterations.
+
+
+\end{document}
